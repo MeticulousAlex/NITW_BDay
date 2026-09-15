@@ -1,488 +1,449 @@
-// Процедурная модель Мэй. Пропорции восстановлены по референсам:
-// огромная круглая голова (~45% роста), большие овальные красные глаза,
-// крошечное тело, короткие конечности, зазубренное правое ухо.
-// Анимации: упругая походка, дыхание, дёрганье ухом,
-// мимика и «говорящий» рот во время диалогов.
+// Мэй Боровски 1:1 по внутриигровому спрайту (refs-local/mae.png, 234×361).
+// Все координаты — в пикселях спрайта относительно точки между подошвами;
+// сам спрайт смотрит влево, вправо модель отражается целиком.
 
-import type { Mood } from './data';
-import { lerp } from './draw';
+import { RUN_FRAMES } from './mae-run';
+import { JUMP_FRAMES } from './mae-jump';
+import { TURN_BRAKE, TURN_START, TURN_RUN_FROM } from './mae-turn';
+import { GRAVITY, JUMP_VELOCITY, MAE_H } from './data';
 
-const FUR = '#0d1b34'; // тёмно-синяя шерсть
-const FUR_DARK = '#081222'; // дальние части
-const EYE_WHITE = '#f1eaa4'; // светлая миндалевидная основа глаза
-const PUPIL = '#b8340d'; // большой тёмно-оранжевый зрачок
-const SHIRT = '#a8541c'; // тёмно-оранжевая кофта
-const SHIRT_DARK = '#833003';
-const SLEEVE = '#55190e'; // тёмно-красные рукава
-const ZERO = '#f1eaa4'; // «перечёркнутый ноль»
-const JEANS = '#2a2d36';
-const BOOT = '#141810';
+const SPRITE_H = 357; // рост спрайта, px
+const K = MAE_H / SPRITE_H;
 
-// Рот — две палочки из нижней вершины носа. len — длина, drop — насколько
-// опущен кончик, sag — прогиб дуги (плюс — провисает вниз, даёт улыбку).
-const MOUTH: Record<Mood, { len: number; drop: number; sag: number }> = {
-  neutral: { len: 6, drop: 2.5, sag: 0 },
-  happy: { len: 11, drop: -1.5, sag: 3.5 },
-  annoyed: { len: 9.5, drop: 2, sag: -1.5 },
-  sleepy: { len: 7, drop: 3.5, sag: -0.8 },
-  sad: { len: 9, drop: 5.5, sag: -2.5 },
-  surprised: { len: 5, drop: 5, sag: 1.5 },
-};
+const FUR = '#0a1e2e';
+const SHIRT = '#91410a';
+const BROWN = '#471a05'; // рукава и «перечёркнутый ноль»
+const PUPIL = '#aa2512';
+const CREAM = '#faf9b8'; // белки, нос, рот, усы
+const PANTS = '#2a2a2a';
+const SHOE = '#1b3135';
+const SHOE_BACK = '#122125';
+const LACE = '#7d6d3a';
+const FOREHEAD = '#27394a';
+const LID_LINE = '#040d15'; // закрытый глаз
+
+type Pt = [number, number, 1?]; // третий элемент — острый угол
+type XY = [number, number];
 
 export interface MaePose {
-  x: number; // мировые координаты (центр ступней)
-  y: number; // уровень пола
+  x: number;
+  y: number; // уровень подошв
   dir: 1 | -1;
-  speed: number;
-  airborne: boolean;
-  mood: Mood;
-  talking: boolean;
 }
 
-// ключевые высоты (origin — подошвы, ось Y вверх)
-const HIP_Y = -56;
-const TORSO_TOP = -102;
-const HEAD_CY = -130;
-const HEAD_RX = 44;
-const HEAD_RY = 33;
+/**
+ * Кадр анимации. head/torso — [dx, dy, поворот°] вокруг своих опорных точек.
+ * Руки — [плечо x,y, локоть x,y, запястье x,y, добавочная длина предплечья],
+ * ноги — [бедро x,y, колено x,y, лодыжка x,y, доп. поворот ботинка°].
+ */
+export interface MaeFrame {
+  head: number[];
+  torso: number[];
+  backArm: number[];
+  frontArm: number[];
+  backLeg: number[];
+  frontLeg: number[];
+  /** веки [верхнее, нижнее]: 0 — на месте, 1 — на середине глаза, >1 — за серединой */
+  lids?: number[];
+  /** сдвиг зрачков [dx, dy] */
+  look?: number[];
+}
+
+export const IDLE_FRAME: MaeFrame = {
+  head: [0, 0, 0],
+  torso: [0, 0, 0],
+  backArm: [-30.5, -179.5, -40, -141, -40, -107, 2],
+  frontArm: [30, -179, 47, -142, 44.5, -104.5, 10],
+  backLeg: [-16, -100, -16, -72, -16, -44, 0],
+  frontLeg: [17, -100, 17.5, -71, 18, -42, 0],
+};
+
+const HEAD_PIVOT: XY = [-3, -274];
+const TORSO_PIVOT: XY = [0, -148];
+const DEG = Math.PI / 180;
+
+const HEAD: Pt[] = [
+  [102, -348, 1], [104, -308], [100, -285], [95, -275], [95, -259], [91, -242], [82, -226],
+  [63, -210], [41, -201], [20, -196], [-10, -194], [-34, -198], [-51, -202], [-73, -212],
+  [-93, -231], [-101, -248], [-103, -273], [-112, -296, 1], [-108, -307, 1], [-114, -311, 1],
+  [-114, -319, 1], [-121, -323, 1], [-126, -339, 1], [-90, -333, 1], [-68, -324], [-48, -333],
+  [-18, -338], [10, -335], [47, -331], [60, -326, 1],
+];
+const TUFT: Pt[] = [
+  [-1, -333, 1], [3, -349, 1], [11, -343, 1], [15, -356, 1], [22, -343, 1], [38, -354, 1],
+  [33, -341, 1], [48, -344, 1], [42, -333, 1],
+];
+const TORSO: Pt[] = [
+  [-31, -201, 1], [-38, -179], [-41, -164], [-43, -139], [-46, -113, 1], [-10, -108],
+  [53, -106, 1], [56, -135], [52, -156], [45, -184], [38, -202, 1],
+];
+const NECK: Pt[] = [[-31, -201, 1], [-30, -188], [-26, -182], [-16, -179], [-5, -179], [4, -181], [19, -190], [23, -197], [39, -201, 1]];
+const HIPS: Pt[] = [
+  [-38, -113, 1], [-36, -104], [-21, -90], [-6, -84], [9, -85], [26, -89], [33, -97], [35, -113, 1],
+];
+// ботинок: верх голенища в (0,0), носок к −x
+const BOOT: Pt[] = [[-10, 0, 1], [10, 0, 1], [9, 20], [8, 26], [3, 28], [-24, 27], [-25, 23], [-18, 19], [-10, 14]];
+
+function shape(ctx: CanvasRenderingContext2D, pts: Pt[], fill: string | CanvasGradient) {
+  const n = pts.length;
+  const mid = (a: Pt, b: Pt): XY => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = pts[0][2] ? pts[0] : mid(pts[n - 1], pts[0]);
+  ctx.beginPath();
+  ctx.moveTo(start[0], start[1]);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const next = pts[(i + 1) % n];
+    if (p[2]) {
+      ctx.lineTo(p[0], p[1]);
+      if (!next[2]) ctx.lineTo(...mid(p, next));
+    } else {
+      ctx.quadraticCurveTo(p[0], p[1], ...mid(p, next));
+    }
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+function line(ctx: CanvasRenderingContext2D, pts: XY[], color: string, width: number) {
+  ctx.beginPath();
+  ctx.moveTo(...pts[0]);
+  for (const p of pts.slice(1)) ctx.lineTo(...p);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+/** Кривая через три сустава: контрольная точка подобрана так, чтобы средний сустав лежал на кривой. */
+function limb(ctx: CanvasRenderingContext2D, j: number[], color: string, width: number) {
+  const [ax, ay, bx, by, cx, cy] = j;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.quadraticCurveTo(2 * bx - (ax + cx) / 2, 2 * by - (ay + cy) / 2, cx, cy);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+/** Поворот продолжения конечности (кисть, носок) вдоль отрезка средний сустав → конец. */
+function along(ctx: CanvasRenderingContext2D, j: number[]) {
+  ctx.translate(j[4], j[5]);
+  ctx.rotate(Math.atan2(j[5] - j[3], j[4] - j[2]) - Math.PI / 2);
+}
+
+function group(ctx: CanvasRenderingContext2D, t: number[], pivot: XY, draw: () => void) {
+  ctx.save();
+  ctx.translate(pivot[0] + t[0], pivot[1] + t[1]);
+  ctx.rotate(t[2] * DEG);
+  ctx.translate(-pivot[0], -pivot[1]);
+  draw();
+  ctx.restore();
+}
+
+/**
+ * Рука по игре: рукав → тёмное предплечье ровно в ширину рукава, продолжающее
+ * изгиб рукава по касательной → ладонь с тремя пальцами. j[6] — добавочная длина предплечья.
+ */
+function arm(ctx: CanvasRenderingContext2D, j: number[], width: number) {
+  const [ax, ay, bx, by, cx, cy] = j;
+  limb(ctx, j, BROWN, width);
+  const qx = 2 * bx - (ax + cx) / 2;
+  const qy = 2 * by - (ay + cy) / 2;
+  const len = 24 + j[6];
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(Math.atan2(cy - qy, cx - qx) - Math.PI / 2); // касательная в конце рукава
+  ctx.fillStyle = FUR;
+  ctx.fillRect(-width / 2, -1, width, len + 2);
+  ctx.translate(0, len);
+  shape(ctx, [[-width / 2, -2, 1], [width / 2, -2, 1], [11, 6], [11, 12], [-11, 12], [-11, 6]], FUR);
+  for (const x of [-7, 0, 7]) {
+    ctx.beginPath();
+    ctx.arc(x, x === 0 ? 16 : 14, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function leg(ctx: CanvasRenderingContext2D, j: number[], boot: string) {
+  limb(ctx, j, PANTS, 17);
+  ctx.save();
+  along(ctx, j);
+  ctx.fillStyle = FUR;
+  ctx.fillRect(-8.5, 0, 17, 14); // тёмная полоса носка
+  ctx.translate(0, 14);
+  ctx.rotate(j[6] * DEG);
+  shape(ctx, BOOT, boot);
+  line(ctx, [[-4, 5], [3, 5], [-4, 11], [3, 11]], LACE, 2);
+  ctx.restore();
+}
+
+/**
+ * Линза: острый внешний угол, чуть скруглённый внутренний, пик дуги посередине.
+ * Веки — это высоты дуг: top вверх и bottom вниз от линии глаза (отрицательная — дуга перешла середину).
+ */
+function eyePath(ctx: CanvasRenderingContext2D, outer: number, inner: number, cy: number, top: number, bottom: number) {
+  const w = inner - outer;
+  const a = outer + w * 0.2;
+  const b = inner - w * 0.06;
+  ctx.beginPath();
+  ctx.moveTo(outer, cy);
+  ctx.bezierCurveTo(a, cy - top, b, cy - top, inner, cy);
+  ctx.bezierCurveTo(b, cy + bottom, a, cy + bottom, outer, cy);
+}
+
+function eye(ctx: CanvasRenderingContext2D, outer: number, inner: number, cy: number, pupil: XY, r: number, lids: number[]) {
+  const h = 35;
+  const top = h * (1 - lids[0]);
+  const bottom = h * (1 - lids[1]);
+  if (top + bottom < 1) {
+    // веки сомкнулись — тёмная линия там, где сошлись дуги
+    const w = inner - outer;
+    ctx.beginPath();
+    ctx.moveTo(outer, cy);
+    ctx.bezierCurveTo(outer + w * 0.2, cy - top * 0.75, inner - w * 0.06, cy - top * 0.75, inner, cy);
+    ctx.strokeStyle = LID_LINE;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    return;
+  }
+  eyePath(ctx, outer, inner, cy, top, bottom);
+  ctx.fillStyle = CREAM;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.beginPath();
+  ctx.arc(...pupil, r, 0, Math.PI * 2);
+  ctx.fillStyle = PUPIL;
+  ctx.fill();
+  ctx.restore();
+}
+
+function head(ctx: CanvasRenderingContext2D, lids: number[], look: number[]) {
+  shape(ctx, HEAD, FUR);
+  const tuft = ctx.createLinearGradient(0, -332, 0, -354);
+  tuft.addColorStop(0, '#1c2532');
+  tuft.addColorStop(1, '#7d474b');
+  shape(ctx, TUFT, tuft);
+  for (const s of [[[-20, -315], [-15, -303]], [[-6, -326], [-8, -312]], [[0, -308], [-7, -297]]] as XY[][]) {
+    line(ctx, s, FOREHEAD, 3);
+  }
+  eye(ctx, -99, -18, -267, [-81.5 + look[0], -264.5 + look[1]], 30.5, lids);
+  eye(ctx, 78, -4, -267, [8 + look[0], -267 + look[1]], 30.5, lids);
+
+  // нос, рот «ㅅ», усы
+  ctx.beginPath();
+  ctx.moveTo(-22, -237);
+  ctx.lineTo(-12, -237);
+  ctx.lineTo(-17, -228);
+  ctx.closePath();
+  ctx.strokeStyle = CREAM;
+  ctx.lineWidth = 2.8;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  line(ctx, [[-26, -214], [-17, -227], [-5, -214]], CREAM, 2.8);
+  for (const w of [[[-53, -231], [-35, -230]], [[-51, -218], [-36, -221]], [[6, -230], [23, -231]], [[8, -222], [21, -218]]] as XY[][]) {
+    line(ctx, w, CREAM, 2.8);
+  }
+}
+
+/** Кадр в пикселях спрайта (без масштаба и отражения). */
+export function drawFrame(ctx: CanvasRenderingContext2D, f: MaeFrame) {
+  leg(ctx, f.backLeg, SHOE_BACK);
+  leg(ctx, f.frontLeg, SHOE);
+  group(ctx, f.torso, TORSO_PIVOT, () => shape(ctx, HIPS, PANTS));
+  arm(ctx, f.backArm, 12); // дальняя рука — за корпусом
+  group(ctx, f.torso, TORSO_PIVOT, () => {
+    shape(ctx, TORSO, SHIRT);
+    shape(ctx, NECK, FUR);
+    ctx.beginPath();
+    ctx.ellipse(-22, -155, 12, 15, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 4.5;
+    ctx.stroke();
+    line(ctx, [[-33, -168], [-10, -140]], BROWN, 4.5);
+  });
+  arm(ctx, f.frontArm, 16); // ближняя — перед корпусом
+  group(ctx, f.head, HEAD_PIVOT, () => head(ctx, f.lids ?? [0, 0], f.look ?? [0, 0]));
+}
+
+const RUN_FPS = 25; // кадры бега сменяются ступенчато, как в webp из игры
+const RUN_START = 7; // по видео бег из стойки начинается с позы переноса (колено вверх)
+const TURN_FPS = 30; // позы разворота — каждый кадр видео (13:32), между кадрами плавный переход
+const TURN_LOOK = 55; // зрачки за торможение переезжают к стороне нового направления
+const TURN_BLEND = 2 / 30; // вход в торможение из текущей позы бега
+const TURN_LOOK_BACK = 0.25; // старт из стойки в другую сторону: зрачки плавно переезжают к новому направлению, с
+const HEAD_DROP = 5; // на бегу и при развороте голова ниже на пару пикселей — не отрывается от тела
+
+/** Та же поза с головой, опущенной на HEAD_DROP (для бега и разворота). */
+function lowered(f: MaeFrame): MaeFrame {
+  return { ...f, head: [f.head[0], f.head[1] + HEAD_DROP, f.head[2]] };
+}
+const JUMP_FPS = 30; // позы прыжка — каждый кадр видео, между кадрами плавный переход
+const T_APEX = -JUMP_VELOCITY / GRAVITY; // подъём до пика, с
+const LOWER_LID_PEAK = 1.28; // нижнее веко к пику — выше середины глаза
+const LOOK_PEAK = [6, -10]; // зрачки к пику — вверх и к вертикальной оси глаза (в стойке они у края по ходу движения)
+const LAND_TIME = 0.3; // приземление: просадка и возврат в стойку
+const LAND_SQUASH = 0.07; // до нижней точки просадки
+const LID_CLOSE = 0.04; // веки смыкаются посередине…
+const LID_OPEN = 0.2; // …и держатся сомкнутыми ≈0.2 с
+
+/** Просадка при приземлении: голова и корпус ниже, колени чуть в стороны. */
+const SQUASH_FRAME: MaeFrame = {
+  head: [0, 22, 0],
+  torso: [0, 18, 0],
+  backArm: [-30.5, -161.5, -42, -125, -42, -93, 2],
+  frontArm: [30, -161, 49, -126, 46.5, -90.5, 10],
+  backLeg: [-16, -82, -25, -60, -16, -44, 0],
+  frontLeg: [17, -82, 26, -59, 18, -42, 0],
+};
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const ease = (t: number) => t * t * (3 - 2 * t);
+
+function lerpFrame(a: MaeFrame, b: MaeFrame, t: number): MaeFrame {
+  const mix = (x: number[], y: number[]) => x.map((v, i) => v + (y[i] - v) * t);
+  return {
+    head: mix(a.head, b.head),
+    torso: mix(a.torso, b.torso),
+    backArm: mix(a.backArm, b.backArm),
+    frontArm: mix(a.frontArm, b.frontArm),
+    backLeg: mix(a.backLeg, b.backLeg),
+    frontLeg: mix(a.frontLeg, b.frontLeg),
+    lids: mix(a.lids ?? [0, 0], b.lids ?? [0, 0]),
+    look: mix(a.look ?? [0, 0], b.look ?? [0, 0]),
+  };
+}
+
+/** Позы по времени с плавным переходом между кадрами видео. */
+function sequence(frames: MaeFrame[], t: number): MaeFrame {
+  const f = Math.min(frames.length - 1, t * TURN_FPS);
+  const i = Math.floor(f);
+  return lerpFrame(frames[i], frames[Math.min(i + 1, frames.length - 1)], f - i);
+}
 
 export class Mae {
-  private phase = 0;
-  private earT = 5;
-  private earFlick = 0;
-  private talkT = 0;
-  private mouthOpen = 0;
-  private breathe = 0;
-  // форма рта плавно перетекает между настроениями
-  private mouthLen = MOUTH.neutral.len;
-  private mouthDrop = MOUTH.neutral.drop;
-  private mouthSag = MOUTH.neutral.sag;
-  // взгляд: сглаженное смещение зрачков
-  private lookX = 0;
-  private lookY = 0;
+  private runTime = 0;
+  private speed = 0;
+  private dir: 1 | -1 = 1;
+  private air = -1; // время в воздухе, −1 — на земле
+  private land = -1; // время после касания пола, −1 — приземление закончилось
+  private lastAir: MaeFrame = IDLE_FRAME; // поза в момент касания
+  private brake = -1; // разворот: время с начала торможения (вместе с паузой на месте), −1 — нет
+  private brakeFrom: MaeFrame = IDLE_FRAME; // поза бега в момент начала торможения
+  private start = -1; // время с момента смены направления (наклон головы на старте), −1 — нет
+  private brakeLook = 0; // сдвиг зрачков к новой стороне, набранный за торможение
+  private startLook = 0; // сдвиг зрачков в начале старта (сколько ещё осталось переехать)
 
-  update(dt: number, walking: boolean, speed: number, talking: boolean, dir: 1 | -1, mood: Mood) {
-    if (walking) this.phase += dt * (7 + speed * 0.014);
-    else this.phase = lerp(this.phase, Math.round(this.phase / Math.PI) * Math.PI, Math.min(1, dt * 10));
+  /** braking — разворот на бегу: торможение и пауза на месте перед сменой направления. */
+  update(dt: number, speed: number, dir: 1 | -1, airborne: boolean, braking: boolean) {
+    if (airborne) {
+      this.air = this.air < 0 ? 0 : this.air + dt;
+      this.land = -1;
+    } else if (this.air >= 0) {
+      this.lastAir = this.airFrame();
+      this.air = -1;
+      this.land = 0;
+    } else if (this.land >= 0) {
+      this.land += dt;
+      if (this.land >= LAND_TIME) this.land = -1;
+    }
 
-    this.breathe += dt * 2.1;
-
-    const mt = MOUTH[mood] ?? MOUTH.neutral;
-    const k = Math.min(1, dt * 7);
-    this.mouthLen = lerp(this.mouthLen, mt.len, k);
-    this.mouthDrop = lerp(this.mouthDrop, mt.drop, k);
-    this.mouthSag = lerp(this.mouthSag, mt.sag, k);
-
-    // цель взгляда: в сторону движения; в разговоре — прямо; в idle — лёгкий дрейф
-    let tx = 0;
-    let ty = 0.4;
-    if (walking) {
-      tx = dir * 4.5;
-      ty = 0;
-    } else if (talking) {
-      tx = 0;
-      ty = 0.6;
+    if (braking && !airborne && TURN_BRAKE.length) {
+      if (this.brake < 0) {
+        this.brakeFrom = this.groundFrame();
+        this.brake = 0;
+      } else {
+        this.brake += dt;
+      }
     } else {
-      tx = Math.sin(this.breathe * 0.35) * 2.2;
-      ty = 0.4 + Math.sin(this.breathe * 0.22) * 0.8;
+      this.brake = -1;
     }
-    this.lookX = lerp(this.lookX, tx, Math.min(1, dt * 6));
-    this.lookY = lerp(this.lookY, ty, Math.min(1, dt * 6));
+    if (this.brake >= 0) this.brakeLook = TURN_LOOK * ease(clamp01((this.brake * TURN_FPS) / TURN_BRAKE.length));
 
-    this.earT -= dt;
-    if (this.earT <= 0) {
-      this.earFlick = 1;
-      this.earT = 4 + Math.random() * 6;
+    if (dir !== this.dir && !airborne && TURN_START.length) {
+      this.start = 0; // и после разворота на бегу, и при старте из стойки в другую сторону
+      // после торможения зрачки уже у новой стороны; из стойки — переезжают на старте
+      this.startLook = TURN_LOOK - this.brakeLook;
+      this.brakeLook = 0;
+    } else if (this.start >= 0) {
+      this.start += dt;
+      if (this.start * TURN_FPS >= TURN_START.length) {
+        // последняя поза старта уже совпадает с позой бега — переход без рывка
+        this.start = -1;
+        // бег продолжается с фазы, совпадающей с последней позой старта
+        const n = RUN_FRAMES.length;
+        this.runTime = ((((TURN_RUN_FROM - RUN_START) % n) + n) % n + 0.5) / RUN_FPS;
+      }
     }
-    if (this.earFlick > 0) this.earFlick = Math.max(0, this.earFlick - dt * 5);
 
-    if (talking) {
-      this.talkT += dt * 14;
-      this.mouthOpen = Math.abs(Math.sin(this.talkT)) > 0.45 ? 1 : 0;
-    } else {
-      this.mouthOpen = lerp(this.mouthOpen, 0, Math.min(1, dt * 12));
+    if (this.start < 0 && this.brake < 0) {
+      this.brakeLook = 0; // торможение отменено без смены направления
+      if (speed === 0) this.runTime = 0;
+      else this.runTime += dt;
     }
+    this.speed = speed;
+    this.dir = dir;
   }
 
-  draw(ctx: CanvasRenderingContext2D, pose: MaePose, t: number) {
-    const walking = Math.abs(pose.speed) > 8 && !pose.airborne;
-    const p = this.phase;
-    // упругий подскок: тело приподнимается на каждом шаге
-    const bob = walking ? Math.abs(Math.sin(p)) * 7 : Math.sin(this.breathe) * 1.4;
-    const squash = walking ? 1 + Math.sin(p * 2) * 0.03 : 1 + Math.sin(this.breathe) * 0.008;
+  private groundFrame(): MaeFrame {
+    if (this.start >= 0) {
+      const pose = lowered(sequence(TURN_START, this.start));
+      pose.look = [this.startLook * (1 - ease(clamp01(this.start / TURN_LOOK_BACK))), 0];
+      return pose;
+    }
+    if (this.brake >= 0) {
+      const pose = lerpFrame(this.brakeFrom, lowered(sequence(TURN_BRAKE, this.brake)), ease(clamp01(this.brake / TURN_BLEND)));
+      pose.look = [this.brakeLook, 0];
+      return pose;
+    }
+    return this.speed === 0 ? IDLE_FRAME : lowered(RUN_FRAMES[(RUN_START + Math.floor(this.runTime * RUN_FPS)) % RUN_FRAMES.length]);
+  }
 
+  /** В воздухе: позы по времени полёта с переходом между кадрами; нижнее веко и зрачки — к пику и обратно. */
+  private airFrame(): MaeFrame {
+    const f = Math.min(JUMP_FRAMES.length - 1, this.air * JUMP_FPS);
+    const i = Math.floor(f);
+    const pose = lerpFrame(JUMP_FRAMES[i], JUMP_FRAMES[Math.min(i + 1, JUMP_FRAMES.length - 1)], f - i);
+    const k = this.air < T_APEX ? ease(this.air / T_APEX) : 1 - ease(clamp01((this.air - T_APEX) / T_APEX));
+    pose.lids = [0, LOWER_LID_PEAK * k];
+    pose.look = [LOOK_PEAK[0] * k, LOOK_PEAK[1] * k];
+    return pose;
+  }
+
+  /** Приземление: мягкая просадка, затем плавно в стойку или бег; веки смыкаются посередине на ≈0.2 с. */
+  private landFrame(): MaeFrame {
+    const t = this.land;
+    const pose =
+      t < LAND_SQUASH
+        ? lerpFrame(this.lastAir, SQUASH_FRAME, ease(t / LAND_SQUASH))
+        : lerpFrame(SQUASH_FRAME, this.groundFrame(), ease((t - LAND_SQUASH) / (LAND_TIME - LAND_SQUASH)));
+    const c = t < LID_OPEN ? ease(clamp01(t / LID_CLOSE)) : 1 - ease(clamp01((t - LID_OPEN) / (LAND_TIME - LID_OPEN)));
+    pose.lids = [c, c];
+    pose.look = [0, 0];
+    return pose;
+  }
+
+  draw(ctx: CanvasRenderingContext2D, pose: MaePose) {
+    const frame = this.air >= 0 ? this.airFrame() : this.land >= 0 ? this.landFrame() : this.groundFrame();
     ctx.save();
     ctx.translate(pose.x, pose.y);
-
-    // мягкая тень
-    ctx.save();
-    ctx.scale(1, 0.3);
-    ctx.beginPath();
-    ctx.arc(0, 0, 40, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fill();
-    ctx.restore();
-
-    ctx.scale(pose.dir, 1);
-    ctx.translate(0, -bob);
-    ctx.scale(2 - squash, squash); // squash & stretch по вертикали
-
-    this.drawLegs(ctx, pose, p, walking);
-    this.drawArm(ctx, p, walking, false); // дальняя рука — за корпусом
-    this.drawBody(ctx, walking, p);
-    this.drawHead(ctx, t, pose);
-    this.drawArm(ctx, p, walking, true); // ближняя — перед корпусом
-
+    ctx.scale(pose.dir === 1 ? -K : K, K);
+    drawFrame(ctx, frame);
     ctx.restore();
   }
 
-  private drawLegs(ctx: CanvasRenderingContext2D, pose: MaePose, p: number, walking: boolean) {
-    const legLen = 40;
-    const swing = walking ? 0.7 : 0;
-
-    for (let i = 0; i < 2; i++) {
-      const front = i === 0;
-      const ph = p + (front ? 0 : Math.PI);
-      let angle = Math.sin(ph) * swing;
-      let lift = walking ? Math.max(0, Math.sin(ph + Math.PI / 2)) * 10 : 0;
-      if (pose.airborne) {
-        angle = front ? 0.55 : -0.4;
-        lift = front ? 12 : 5;
-      }
-      const hx = front ? 6 : -6;
-      const footX = hx + Math.sin(angle) * legLen;
-      const footY = HIP_Y + Math.cos(angle) * legLen - lift;
-
-      // короткая штанина
-      ctx.strokeStyle = front ? JEANS : '#1e2129';
-      ctx.lineWidth = 13;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(hx, HIP_Y);
-      ctx.lineTo(footX, footY - 6);
-      ctx.stroke();
-
-      // ботинок — округлый, чуть выступает вперёд
-      ctx.save();
-      ctx.translate(footX, footY);
-      ctx.rotate(angle * 0.3);
-      ctx.fillStyle = BOOT;
-      ctx.beginPath();
-      ctx.ellipse(3, -3, 13, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(-7, -8, 12, 7);
-      ctx.fillStyle = '#232a1e';
-      ctx.beginPath();
-      ctx.ellipse(4, 2, 12, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  private drawBody(ctx: CanvasRenderingContext2D, walking: boolean, p: number) {
-    // крошечный торс — тёмно-оранжевая кофта, почти скрыт головой
-    const lean = walking ? Math.sin(p) * 0.02 : 0;
-    ctx.save();
-    ctx.rotate(lean);
-    ctx.fillStyle = SHIRT;
-    ctx.beginPath();
-    ctx.moveTo(-19, HIP_Y + 4);
-    ctx.quadraticCurveTo(-23, TORSO_TOP + 10, -13, TORSO_TOP);
-    ctx.lineTo(13, TORSO_TOP);
-    ctx.quadraticCurveTo(23, TORSO_TOP + 10, 19, HIP_Y + 4);
-    ctx.quadraticCurveTo(0, HIP_Y + 10, -19, HIP_Y + 4);
-    ctx.fill();
-
-    // Вырез горловины: асимметричный — уходит чуть дальше в сторону движения
-    // (весь персонаж рисуется в системе, где +x — направление взгляда).
-    ctx.fillStyle = FUR_DARK;
-    ctx.beginPath();
-    ctx.moveTo(-10, TORSO_TOP - 2);
-    ctx.bezierCurveTo(-8, TORSO_TOP + 18, 8, TORSO_TOP + 21, 13, TORSO_TOP - 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // подол
-    ctx.fillStyle = SHIRT_DARK;
-    ctx.beginPath();
-    ctx.moveTo(-19, HIP_Y - 2);
-    ctx.quadraticCurveTo(0, HIP_Y + 4, 19, HIP_Y - 2);
-    ctx.lineTo(19, HIP_Y + 4);
-    ctx.quadraticCurveTo(0, HIP_Y + 10, -19, HIP_Y + 4);
-    ctx.closePath();
-    ctx.fill();
-
-    // «перечёркнутый ноль»
-    ctx.save();
-    ctx.translate(0, TORSO_TOP + 27);
-    ctx.strokeStyle = ZERO;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 7.5, 9.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-6, 7);
-    ctx.lineTo(6, -7);
-    ctx.stroke();
-    ctx.restore();
-    ctx.restore();
-  }
-
-  private drawArm(ctx: CanvasRenderingContext2D, p: number, walking: boolean, front: boolean) {
-    const sx = front ? 17 : -17;
-    const sy = TORSO_TOP + 6;
-    const phase = p + (front ? Math.PI : 0);
-    const swing = walking ? Math.sin(phase) * 0.55 : 0.05;
-    const armLen = 30;
-    const hx = sx + Math.sin(swing) * armLen;
-    const hy = sy + Math.cos(swing) * armLen;
-
-    // Локоть уводит в сторону, обратную замаху: кисть ведёт, предплечье
-    // отстаёт, и рука идёт дугой, а не прямой палкой. В покое — лёгкий
-    // прогиб наружу от корпуса.
-    const bow = walking ? Math.cos(phase) * 8 : front ? -5 : 5;
-    const dx = hx - sx;
-    const dy = hy - sy;
-    const d = Math.hypot(dx, dy) || 1;
-    const cx = (sx + hx) / 2 + (-dy / d) * bow;
-    const cy = (sy + hy) / 2 + (dx / d) * bow;
-
-    // Кривую ведём короткими отрезками с убывающей толщиной — получается
-    // сужение от плеча к запястью.
-    const N = 10;
-    const sleeveEnd = 4; // докуда идёт короткий рукав
-    const sleeve = front ? SLEEVE : '#3f1209';
-    const skin = front ? FUR : FUR_DARK;
-    ctx.lineCap = 'round';
-    let px = sx;
-    let py = sy;
-    for (let i = 1; i <= N; i++) {
-      const t = i / N;
-      const mt = 1 - t;
-      const qx = mt * mt * sx + 2 * mt * t * cx + t * t * hx;
-      const qy = mt * mt * sy + 2 * mt * t * cy + t * t * hy;
-      ctx.strokeStyle = i <= sleeveEnd ? sleeve : skin;
-      ctx.lineWidth = 11 - t * 4.5;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(qx, qy);
-      ctx.stroke();
-      px = qx;
-      py = qy;
-    }
-
-    // лапа
-    ctx.fillStyle = skin;
-    ctx.beginPath();
-    ctx.arc(px, py + 1, 5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  private drawHead(ctx: CanvasRenderingContext2D, t: number, pose: MaePose) {
-    const walking = Math.abs(pose.speed) > 8 && !pose.airborne;
-    // голова слегка наклоняется вперёд при ходьбе
-    const tilt = walking ? 0.05 : Math.sin(this.breathe * 0.5) * 0.012;
-
-    ctx.save();
-    ctx.translate(0, HEAD_CY);
-    ctx.rotate(tilt);
-
-    // уши — высокие треугольники; правое зазубрено и дёргается
-    const flick = Math.sin(this.earFlick * Math.PI) * 0.45;
-    this.drawEar(ctx, -30, -HEAD_RY + 8, -0.3, false);
-    this.drawEar(ctx, 29, -HEAD_RY + 8, 0.26 + flick, true);
-
-    // огромная круглая голова
-    ctx.fillStyle = FUR;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, HEAD_RX, HEAD_RY, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-
-    this.drawFace(ctx, pose, t);
-    ctx.restore();
-  }
-
-  private drawEar(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    rot: number,
-    notched: boolean,
-  ) {
+  /** dev: эталонный кадр поверх модели в той же системе координат. */
+  drawReference(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, dir: 1 | -1) {
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(rot);
-    ctx.fillStyle = FUR;
-    ctx.beginPath();
-    if (notched) {
-      // зазубренное ухо — след старой стычки с собакой
-      ctx.moveTo(-15, 5);
-      ctx.lineTo(-6, -32);
-      ctx.lineTo(1, -21);
-      ctx.lineTo(8, -34);
-      ctx.lineTo(16, 5);
-    } else {
-      ctx.moveTo(-15, 5);
-      ctx.lineTo(0, -36);
-      ctx.lineTo(16, 5);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#2a1530';
-    ctx.beginPath();
-    ctx.moveTo(-7, 3);
-    ctx.lineTo(0, -21);
-    ctx.lineTo(8, 3);
-    ctx.closePath();
-    ctx.fill();
+    ctx.scale(dir === 1 ? -K : K, K);
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(img, -128, -358);
     ctx.restore();
-  }
-
-  // процент смыкания верхнего века по эмоциям (0 — открыто, 1 — закрыто)
-  private lidForMood(mood: Mood, t: number): number {
-    switch (mood) {
-      case 'annoyed':
-        return 0.42;
-      case 'sleepy':
-        return 0.55 + Math.sin(t * 1.2) * 0.07;
-      case 'sad':
-        return 0.3;
-      case 'surprised':
-        return -0.12; // приподнято выше обычного
-      default:
-        return 0.08;
-    }
-  }
-
-  // миндалевидный глаз: светлая основа, большой подвижный зрачок, веко в процентах
-  private drawEye(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    lid: number,
-    lookX: number,
-    lookY: number,
-  ) {
-    ctx.save();
-    ctx.translate(x, y);
-
-    // миндалевидный контур — заострённые углы
-    const almond = () => {
-      ctx.beginPath();
-      ctx.moveTo(-w / 2, 0);
-      ctx.quadraticCurveTo(0, -h * 0.5, w / 2.1, 0);
-      ctx.quadraticCurveTo(0, h * 0.52, -w / 2.1, 0);
-      ctx.closePath();
-    };
-
-    // светлая основа
-    almond();
-    ctx.fillStyle = EYE_WHITE;
-    ctx.fill();
-
-    // всё внутри глаза клиппуется по миндалине
-    ctx.save();
-    almond();
-    ctx.clip();
-
-    // большой тёмно-оранжевый зрачок, подвижный
-    const pr = h * 0.25;
-    ctx.fillStyle = PUPIL;
-    ctx.beginPath();
-    ctx.ellipse(lookX, lookY, pr, pr, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // верхнее веко — закрывает сверху на lid-процент, нижняя граница дугой
-    const lidH = lid * h * 1.1;
-    if (lidH > 0) {
-      const edgeY = -h * 0.62 + lidH;
-      ctx.fillStyle = FUR;
-      ctx.beginPath();
-      ctx.moveTo(-w / 2 - 2, -h * 0.62 - 2);
-      ctx.lineTo(w / 2 + 2, -h * 0.62 - 2);
-      ctx.lineTo(w / 2 + 2, edgeY - 2);
-      ctx.quadraticCurveTo(0, edgeY + h * 0.16, -w / 2 - 2, edgeY - 2);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-
-    ctx.restore();
-  }
-
-  private drawFace(ctx: CanvasRenderingContext2D, pose: MaePose, t: number) {
-    const mood = pose.mood;
-    const lid = this.lidForMood(mood, t);
-
-    // взгляд: грусть и сонливость тянут зрачки вниз
-    let lookX = this.lookX;
-    let lookY = this.lookY;
-    if (mood === 'sad') {
-      lookY += 2.2;
-      lookX *= 0.4;
-    } else if (mood === 'sleepy') {
-      lookY += 1.4;
-    } else if (mood === 'surprised') {
-      lookX *= 0.2;
-      lookY = 0;
-    }
-
-    // Два миндалевидных глаза: широко расставлены и равноудалены от краёв
-    // головы — внешний край каждого отступает от силуэта одинаково.
-    const eyes: Array<{ x: number; w: number; h: number }> = [
-      { x: -23, w: 30, h: 40 },
-      { x: 23, w: 30, h: 40 },
-    ];
-
-    for (const e of eyes) {
-      if (mood === 'happy' && lid < 0.9) {
-        // счастливые закрытые дуги
-        ctx.save();
-        ctx.translate(e.x, -4);
-        ctx.strokeStyle = PUPIL;
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.arc(0, 3, e.w * 0.36, Math.PI * 1.12, Math.PI * 1.88);
-        ctx.stroke();
-        ctx.restore();
-        continue;
-      }
-      this.drawEye(ctx, e.x, -2, e.w, e.h, lid, lookX, lookY);
-    }
-
-    // нос — маленький полый треугольник по центру морды, сразу под глазами
-    ctx.strokeStyle = '#f1eee2';
-    ctx.lineWidth = 1.6;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-3.5, 11);
-    ctx.lineTo(3.5, 11);
-    ctx.lineTo(0, 16.5);
-    ctx.closePath();
-    ctx.stroke();
-
-    this.drawMouth(ctx);
-  }
-
-  // Две палочки из нижней вершины носа: нейтрально — короткие прямые,
-  // с настроением удлиняются и выгибаются дугой.
-  private drawMouth(ctx: CanvasRenderingContext2D) {
-    const nx = 0;
-    const ny = 16.5; // нижняя вершина треугольника-носа
-    const { mouthLen: len, mouthDrop: drop, mouthSag: sag } = this;
-
-    ctx.strokeStyle = '#f1eee2';
-    ctx.lineWidth = 1.6;
-    ctx.lineCap = 'round';
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(nx, ny);
-      ctx.quadraticCurveTo(nx + (side * len) / 2, ny + drop / 2 + sag, nx + side * len, ny + drop);
-      ctx.stroke();
-    }
   }
 }

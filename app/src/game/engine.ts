@@ -1,35 +1,37 @@
-// Игровой движок: цикл, ввод, физика, камера, хотспоты.
+// Игровой движок: цикл, ввод, физика, камера, точки взаимодействия и диалоги.
 
 import {
   WORLD_W,
   WORLD_H,
   FLOOR_Y,
-  PLAYER_SPEED,
+  ROOM_L,
+  ROOM_R,
+  MAE_H,
+  RUN_SPEED,
+  RUN_ACCEL,
+  RUN_DECEL,
+  TURN_HOLD,
+  TURN_ACCEL,
   GRAVITY,
   JUMP_VELOCITY,
   HOTSPOTS,
   type Hotspot,
-  type Mood,
 } from './data';
 import { clamp, damp } from './draw';
-import { drawRoom, drawForeground } from './room';
+import { drawRoom, drawFront } from './room';
 import { Mae } from './mae';
-import { footstep } from './audio';
+import { Dialogue } from './dialogue';
 
-export interface EngineEvents {
-  onInteract: (h: Hotspot) => void;
-  onHotspot: (h: Hotspot | null) => void;
-}
+const FADE_TIME = 0.9; // выход: затемнение → пауза → обратно (сцены этажа пока нет)
 
 export class Engine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private events: EngineEvents;
   private mae = new Mae();
+  private dialogue = new Dialogue();
 
   private raf = 0;
   private lastT = 0;
-  private time = 0;
   private running = false;
 
   private keys = new Set<string>();
@@ -40,26 +42,52 @@ export class Engine {
     dir: 1 as 1 | -1,
     speed: 0,
     airborne: false,
+    turning: false, // разворот на бегу: торможение → пауза → быстрый разгон, без облачка пыли
+    turnHold: 0, // остаток паузы на месте, с
   };
   private camX = 0;
   private viewW = WORLD_W;
   private viewH = WORLD_H;
   private scale = 1;
 
-  private dialogueActive = false;
-  private mood: Mood = 'neutral';
-  private talking = false;
   private activeHotspot: Hotspot | null = null;
-  private lastStepPhase = 0;
+  private promptSpot: Hotspot | null = null; // где рисовать подсказку (и пока она исчезает)
+  private fade = -1; // время затемнения при выходе, −1 — нет
+  private dust: { x: number; y: number; dir: 1 | -1; t: number }[] = [];
+  // dev: эталонный кадр поверх Мэй (?ref=имя файла из refs-local), O — вкл/выкл
+  private refImg = ((): HTMLImageElement | null => {
+    const name = import.meta.env.DEV && new URLSearchParams(location.search).get('ref');
+    if (!name) return null;
+    const img = new Image();
+    img.src = `/refs-local/${name}`;
+    return img;
+  })();
+  private refOn = true;
+
+  private get locked() {
+    return this.dialogue.open || this.fade >= 0;
+  }
 
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
-    if (['arrowleft', 'arrowright', 'arrowup', ' ', 'a', 'd', 'w', 'e'].includes(k)) {
+    if (['arrowleft', 'arrowright', 'arrowup', ' ', 'a', 'd', 'w', 'e', 'enter'].includes(k)) {
       e.preventDefault();
     }
     this.keys.add(k);
-    if ((k === 'e' || k === 'enter') && !this.dialogueActive && this.activeHotspot) {
-      this.events.onInteract(this.activeHotspot);
+    if (k === 'o') this.refOn = !this.refOn;
+    if (this.dialogue.open) {
+      if (!e.repeat) this.dialogue.key(k);
+      return;
+    }
+    if (this.locked) return;
+    if ((k === ' ' || k === 'w' || k === 'arrowup') && !e.repeat && !this.player.airborne) {
+      this.player.vy = JUMP_VELOCITY;
+      this.player.airborne = true;
+    }
+    if ((k === 'e' || k === 'enter') && !e.repeat && this.activeHotspot && !this.player.airborne) {
+      const h = this.activeHotspot;
+      this.player.speed = 0;
+      this.dialogue.start(h.script, h.promptX, h.promptY);
     }
   };
 
@@ -71,10 +99,13 @@ export class Engine {
     this.resize();
   };
 
-  constructor(canvas: HTMLCanvasElement, events: EngineEvents) {
+  constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
-    this.events = events;
+    this.dialogue.onClose = (action) => {
+      if (action === 'exit') this.fade = 0;
+    };
+    void document.fonts.load('600 58px "Yanone Kaffeesatz"'); // canvas сам шрифт не подгружает
     this.resize();
   }
 
@@ -89,7 +120,6 @@ export class Engine {
       if (!this.running) return;
       const dt = Math.min(0.05, (now - this.lastT) / 1000);
       this.lastT = now;
-      this.time += dt;
       this.update(dt);
       this.render();
       this.raf = requestAnimationFrame(loop);
@@ -103,19 +133,6 @@ export class Engine {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('resize', this.onResize);
-  }
-
-  setDialogueActive(active: boolean) {
-    this.dialogueActive = active;
-    if (active) this.player.speed = 0;
-  }
-
-  setMood(mood: Mood) {
-    this.mood = mood;
-  }
-
-  setTalking(talking: boolean) {
-    this.talking = talking;
   }
 
   private resize() {
@@ -133,22 +150,37 @@ export class Engine {
   private update(dt: number) {
     const p = this.player;
 
-    if (!this.dialogueActive) {
+    if (!this.locked) {
       let move = 0;
       if (this.keys.has('arrowleft') || this.keys.has('a')) move -= 1;
       if (this.keys.has('arrowright') || this.keys.has('d')) move += 1;
 
-      p.speed = move * PLAYER_SPEED;
-      if (move !== 0) p.dir = move > 0 ? 1 : -1;
-      p.x = clamp(p.x + p.speed * dt, 60, WORLD_W - 60);
-
-      // прыжок
-      if ((this.keys.has(' ') || this.keys.has('arrowup') || this.keys.has('w')) && !p.airborne) {
-        p.vy = JUMP_VELOCITY;
-        p.airborne = true;
+      if (move !== 0) {
+        if (p.speed !== 0 && Math.sign(p.speed) !== move && !p.airborne) {
+          // разворот на бегу (по видео): сначала торможение как при остановке, лицом по старому направлению
+          p.speed = Math.sign(p.speed) * Math.max(0, Math.abs(p.speed) - RUN_DECEL * dt);
+          p.turning = true;
+          p.turnHold = TURN_HOLD;
+        } else if (p.turning && p.turnHold > 0 && p.speed === 0) {
+          p.turnHold -= dt; // пара кадров на месте
+        } else {
+          if (p.speed === 0 && !p.airborne && !p.turning) this.dust.push({ x: p.x - move * 0.16 * MAE_H, y: p.y, dir: move > 0 ? 1 : -1, t: 0 });
+          if (move !== p.dir && p.speed !== 0) p.speed = -p.speed; // в воздухе разворот без торможения
+          p.dir = move > 0 ? 1 : -1;
+          p.speed = clamp(p.speed + move * (p.turning ? TURN_ACCEL : RUN_ACCEL) * dt, -RUN_SPEED, RUN_SPEED);
+          if (Math.abs(p.speed) === RUN_SPEED) p.turning = false;
+        }
+      } else {
+        const v = Math.max(0, Math.abs(p.speed) - RUN_DECEL * dt);
+        p.speed = Math.sign(p.speed) * v;
+        p.turning = false;
+        p.turnHold = 0;
       }
+      p.x = clamp(p.x + p.speed * dt, ROOM_L + MAE_H * 0.3, ROOM_R - MAE_H * 0.3);
     } else {
       p.speed = 0;
+      p.turning = false;
+      p.turnHold = 0;
     }
 
     // гравитация
@@ -159,32 +191,25 @@ export class Engine {
         p.y = FLOOR_Y;
         p.vy = 0;
         p.airborne = false;
-        footstep();
       }
     }
 
-    const walking = Math.abs(p.speed) > 8 && !p.airborne;
-    this.mae.update(dt, walking, Math.abs(p.speed), this.talking, p.dir, this.mood);
+    this.mae.update(dt, p.speed, p.dir, p.airborne, p.turning && p.turnHold > 0);
 
-    // шаги в такт анимации
-    if (walking) {
-      const stepPhase = Math.floor(this.time * 7);
-      if (stepPhase !== this.lastStepPhase) {
-        this.lastStepPhase = stepPhase;
-        footstep();
-      }
+    for (const d of this.dust) d.t += dt;
+    this.dust = this.dust.filter((d) => d.t < DUST_LIFE);
+
+    if (this.fade >= 0) {
+      this.fade += dt;
+      if (this.fade >= FADE_TIME) this.fade = -1;
     }
 
     // камера с упреждением по направлению взгляда
-    const lookAhead = p.dir * 120;
-    const targetCam = clamp(
-      p.x + lookAhead - this.viewW / 2,
-      0,
-      Math.max(0, WORLD_W - this.viewW),
-    );
+    const lookAhead = p.dir * 0.5 * MAE_H;
+    const targetCam = clamp(p.x + lookAhead - this.viewW / 2, 0, Math.max(0, WORLD_W - this.viewW));
     this.camX = damp(this.camX, targetCam, 4, dt);
 
-    // ближайший хотспот
+    // ближайшая точка взаимодействия
     let nearest: Hotspot | null = null;
     let best = Infinity;
     for (const h of HOTSPOTS) {
@@ -194,78 +219,60 @@ export class Engine {
         nearest = h;
       }
     }
-    if (this.dialogueActive) nearest = null;
-    if (nearest !== this.activeHotspot) {
-      this.activeHotspot = nearest;
-      this.events.onHotspot(nearest);
-    }
+    this.activeHotspot = nearest;
+    if (nearest) this.promptSpot = nearest;
+    this.dialogue.update(dt, nearest !== null && !this.locked);
   }
 
   private render() {
     const { ctx } = this;
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
-    // фон за пределами мира
-    ctx.fillStyle = '#05060c';
+    // вокруг дома — чернота, как в игре
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, this.viewW, this.viewH);
 
-    const camX = this.viewW >= WORLD_W ? (WORLD_W - this.viewW) / 2 * -1 : this.camX;
+    const camX = this.viewW >= WORLD_W ? ((WORLD_W - this.viewW) / 2) * -1 : this.camX;
 
-    drawRoom(ctx, camX, this.time);
-
-    // Мэй
     ctx.save();
     ctx.translate(-camX, 0);
-    this.mae.draw(
-      ctx,
-      {
-        x: this.player.x,
-        y: this.player.y,
-        dir: this.player.dir,
-        speed: this.player.speed,
-        airborne: this.player.airborne,
-        mood: this.mood,
-        talking: this.talking,
-      },
-      this.time,
-    );
+    drawRoom(ctx);
+    for (const d of this.dust) drawDust(ctx, d);
+    this.mae.draw(ctx, { x: this.player.x, y: this.player.y, dir: this.player.dir });
 
-    // маркер «...» над активным хотспотом
-    if (this.activeHotspot && !this.dialogueActive) {
-      this.drawMarker(ctx, this.activeHotspot);
+    if (this.refImg?.complete && this.refOn) {
+      this.mae.drawReference(ctx, this.refImg, this.player.x, this.player.y, this.player.dir);
     }
+
+    drawFront(ctx); // коробки переднего плана — поверх Мэй
+
+    if (this.promptSpot) this.dialogue.drawPrompt(ctx, this.promptSpot.promptX, this.promptSpot.promptY);
+    this.dialogue.drawBubble(ctx, this.player.x, this.player.y, camX, camX + this.viewW);
     ctx.restore();
 
-    drawForeground(ctx, this.time, this.viewW, this.viewH);
-  }
-
-  private drawMarker(ctx: CanvasRenderingContext2D, h: Hotspot) {
-    const bounce = Math.sin(this.time * 3.2) * 6;
-    const x = h.x;
-    const y = h.markerY + bounce;
-
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    // пузырь
-    ctx.fillStyle = '#f1eaa4';
-    ctx.beginPath();
-    ctx.ellipse(x, y, 26, 18, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // хвостик
-    ctx.beginPath();
-    ctx.moveTo(x - 6, y + 14);
-    ctx.lineTo(x + 6, y + 14);
-    ctx.lineTo(x, y + 26);
-    ctx.closePath();
-    ctx.fill();
-    // три точки
-    ctx.fillStyle = '#1c1420';
-    for (let i = -1; i <= 1; i++) {
-      const dotBounce = Math.sin(this.time * 3.2 + i * 0.9) * 2.4;
-      ctx.beginPath();
-      ctx.arc(x + i * 10, y - dotBounce, 3.2, 0, Math.PI * 2);
-      ctx.fill();
+    if (this.fade >= 0) {
+      const t = this.fade;
+      ctx.globalAlpha = t < 0.35 ? t / 0.35 : t < 0.55 ? 1 : Math.max(0, 1 - (t - 0.55) / 0.35);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, this.viewW, this.viewH);
+      ctx.globalAlpha = 1;
     }
-    ctx.restore();
   }
+}
+
+// Пыль: быстро растёт ~0.08 с, затем тает и сносится назад и вверх.
+const DUST_LIFE = 0.28;
+function drawDust(ctx: CanvasRenderingContext2D, d: { x: number; y: number; dir: 1 | -1; t: number }) {
+  const k = d.t / DUST_LIFE;
+  const grow = Math.min(1, d.t / 0.08);
+  const S = MAE_H / 235; // размеры облачка подбирались при росте Мэй 235
+  ctx.save();
+  ctx.globalAlpha = 0.85 * (1 - Math.max(0, (k - 0.3) / 0.7));
+  ctx.fillStyle = '#e3ead6';
+  for (const [ox, oy, r] of [[0, -14, 18], [-d.dir * 22, -10, 14], [d.dir * 18, -9, 12]]) {
+    ctx.beginPath();
+    ctx.arc(d.x + (ox * grow - d.dir * 26 * k) * S, d.y + (oy * grow - 10 * k) * S, r * (0.4 + 0.6 * grow) * S, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
