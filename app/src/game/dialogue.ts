@@ -13,7 +13,8 @@ export interface DialogueOption {
   then?: DialogueNode[];
   action?: 'exit';
 }
-export type DialogueNode = { say: string } | { choose: DialogueOption[] };
+/** `at` — мировая точка, над которой висит облачко (для реплик собеседника); по умолчанию — над Мэй. */
+export type DialogueNode = { say: string; at?: [number, number] } | { choose: DialogueOption[] };
 
 const FONT_PX = 58;
 const FONT = `600 ${FONT_PX}px "Yanone Kaffeesatz", "Arial Narrow", sans-serif`;
@@ -91,7 +92,7 @@ export class Dialogue {
     this.shapeT -= dt;
     if (this.shapeT <= 0) {
       this.shape = (this.shape + 1 + Math.floor(Math.random() * (SHAPES - 1))) % SHAPES;
-      this.shapeT = (2 + Math.floor(Math.random() * 3)) / 30;
+      this.shapeT = 1 / 4; // форма меняется 4 раза в секунду (решение пользователя)
     }
     if (!this.open) return;
 
@@ -182,8 +183,10 @@ export class Dialogue {
       this.boxH = lerp(this.boxH, targetH, f);
     }
 
-    const tipY = maeY - MAE_H - HEAD_GAP;
-    const cx = Math.max(viewL + this.boxW / 2 + 30, Math.min(viewR - this.boxW / 2 - 30, maeX));
+    const at = 'say' in this.node ? this.node.at : undefined;
+    const tipY = at ? at[1] : maeY - MAE_H - HEAD_GAP;
+    const anchorX = at ? at[0] : maeX;
+    const cx = Math.max(viewL + this.boxW / 2 + 30, Math.min(viewR - this.boxW / 2 - 30, anchorX));
     const cy = tipY - TAIL_H - this.boxH / 2 + 8;
 
     // раскрытие из подсказки / сворачивание

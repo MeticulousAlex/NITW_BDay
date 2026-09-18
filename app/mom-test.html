@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>mom test</title>
+<style>body{margin:0;background:#fff}canvas{display:block}</style>
+<canvas id="c" width="319" height="465"></canvas>
+<script type="module">
+  import { drawMom } from '/src/game/mom.ts';
+  const ctx = document.getElementById('c').getContext('2d');
+  ctx.clearRect(0, 0, 319, 465);
+  drawMom(ctx, { lids: [0, 0], look: [0, 0] });
+</script>

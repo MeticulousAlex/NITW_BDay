@@ -6,6 +6,7 @@ import { RUN_FRAMES } from './mae-run';
 import { JUMP_FRAMES } from './mae-jump';
 import { TURN_BRAKE, TURN_START, TURN_RUN_FROM } from './mae-turn';
 import { GRAVITY, JUMP_VELOCITY, MAE_H } from './data';
+import { drawCat, line, shape, type CatFrame, type CatSkin, type Pt } from './cat';
 
 const SPRITE_H = 357; // рост спрайта, px
 const K = MAE_H / SPRITE_H;
@@ -22,31 +23,15 @@ const LACE = '#7d6d3a';
 const FOREHEAD = '#27394a';
 const LID_LINE = '#040d15'; // закрытый глаз
 
-type Pt = [number, number, 1?]; // третий элемент — острый угол
 type XY = [number, number];
+
+/** Кадр Мэй — тот же формат, что у любого персонажа конструктора. */
+export type MaeFrame = CatFrame;
 
 export interface MaePose {
   x: number;
   y: number; // уровень подошв
   dir: 1 | -1;
-}
-
-/**
- * Кадр анимации. head/torso — [dx, dy, поворот°] вокруг своих опорных точек.
- * Руки — [плечо x,y, локоть x,y, запястье x,y, добавочная длина предплечья],
- * ноги — [бедро x,y, колено x,y, лодыжка x,y, доп. поворот ботинка°].
- */
-export interface MaeFrame {
-  head: number[];
-  torso: number[];
-  backArm: number[];
-  frontArm: number[];
-  backLeg: number[];
-  frontLeg: number[];
-  /** веки [верхнее, нижнее]: 0 — на месте, 1 — на середине глаза, >1 — за серединой */
-  lids?: number[];
-  /** сдвиг зрачков [dx, dy] */
-  look?: number[];
 }
 
 export const IDLE_FRAME: MaeFrame = {
@@ -57,10 +42,6 @@ export const IDLE_FRAME: MaeFrame = {
   backLeg: [-16, -100, -16, -72, -16, -44, 0],
   frontLeg: [17, -100, 17.5, -71, 18, -42, 0],
 };
-
-const HEAD_PIVOT: XY = [-3, -274];
-const TORSO_PIVOT: XY = [0, -148];
-const DEG = Math.PI / 180;
 
 const HEAD: Pt[] = [
   [102, -348, 1], [104, -308], [100, -285], [95, -275], [95, -259], [91, -242], [82, -226],
@@ -84,191 +65,74 @@ const HIPS: Pt[] = [
 // ботинок: верх голенища в (0,0), носок к −x
 const BOOT: Pt[] = [[-10, 0, 1], [10, 0, 1], [9, 20], [8, 26], [3, 28], [-24, 27], [-25, 23], [-18, 19], [-10, 14]];
 
-function shape(ctx: CanvasRenderingContext2D, pts: Pt[], fill: string | CanvasGradient) {
-  const n = pts.length;
-  const mid = (a: Pt, b: Pt): XY => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  const start = pts[0][2] ? pts[0] : mid(pts[n - 1], pts[0]);
-  ctx.beginPath();
-  ctx.moveTo(start[0], start[1]);
-  for (let i = 0; i < n; i++) {
-    const p = pts[i];
-    const next = pts[(i + 1) % n];
-    if (p[2]) {
-      ctx.lineTo(p[0], p[1]);
-      if (!next[2]) ctx.lineTo(...mid(p, next));
-    } else {
-      ctx.quadraticCurveTo(p[0], p[1], ...mid(p, next));
+/** Шкура Мэй для конструктора персонажей. */
+const MAE_SKIN: CatSkin = {
+  fur: FUR,
+  cream: CREAM,
+  pupil: PUPIL,
+  lidLine: LID_LINE,
+  shirt: SHIRT,
+  sleeve: BROWN,
+  pants: PANTS,
+  shoe: SHOE,
+  shoeBack: SHOE_BACK,
+  lace: LACE,
+  head: HEAD,
+  torso: TORSO,
+  neck: NECK,
+  hips: HIPS,
+  boot: BOOT,
+  headPivot: [-3, -274],
+  torsoPivot: [0, -148],
+  eyes: [
+    { outer: -99, inner: -18, cy: -267, pupil: [-81.5, -264.5], r: 30.5, half: 35 },
+    { outer: 78, inner: -4, cy: -267, pupil: [8, -267], r: 30.5, half: 35 },
+  ],
+  armWidth: [12, 16],
+  forearm: 24,
+  pawHalf: 11,
+  fingers: [-7, 0, 7],
+  fingerR: 5.5,
+  legWidth: 17,
+  sockLen: 14,
+  laces: [[[-4, 5], [3, 5], [-4, 11], [3, 11]]],
+  crown: (ctx) => {
+    const tuft = ctx.createLinearGradient(0, -332, 0, -354);
+    tuft.addColorStop(0, '#1c2532');
+    tuft.addColorStop(1, '#7d474b');
+    shape(ctx, TUFT, tuft);
+    for (const s of [[[-20, -315], [-15, -303]], [[-6, -326], [-8, -312]], [[0, -308], [-7, -297]]] as XY[][]) {
+      line(ctx, s, FOREHEAD, 3);
     }
-  }
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-}
-
-function line(ctx: CanvasRenderingContext2D, pts: XY[], color: string, width: number) {
-  ctx.beginPath();
-  ctx.moveTo(...pts[0]);
-  for (const p of pts.slice(1)) ctx.lineTo(...p);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-}
-
-/** Кривая через три сустава: контрольная точка подобрана так, чтобы средний сустав лежал на кривой. */
-function limb(ctx: CanvasRenderingContext2D, j: number[], color: string, width: number) {
-  const [ax, ay, bx, by, cx, cy] = j;
-  ctx.beginPath();
-  ctx.moveTo(ax, ay);
-  ctx.quadraticCurveTo(2 * bx - (ax + cx) / 2, 2 * by - (ay + cy) / 2, cx, cy);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-}
-
-/** Поворот продолжения конечности (кисть, носок) вдоль отрезка средний сустав → конец. */
-function along(ctx: CanvasRenderingContext2D, j: number[]) {
-  ctx.translate(j[4], j[5]);
-  ctx.rotate(Math.atan2(j[5] - j[3], j[4] - j[2]) - Math.PI / 2);
-}
-
-function group(ctx: CanvasRenderingContext2D, t: number[], pivot: XY, draw: () => void) {
-  ctx.save();
-  ctx.translate(pivot[0] + t[0], pivot[1] + t[1]);
-  ctx.rotate(t[2] * DEG);
-  ctx.translate(-pivot[0], -pivot[1]);
-  draw();
-  ctx.restore();
-}
-
-/**
- * Рука по игре: рукав → тёмное предплечье ровно в ширину рукава, продолжающее
- * изгиб рукава по касательной → ладонь с тремя пальцами. j[6] — добавочная длина предплечья.
- */
-function arm(ctx: CanvasRenderingContext2D, j: number[], width: number) {
-  const [ax, ay, bx, by, cx, cy] = j;
-  limb(ctx, j, BROWN, width);
-  const qx = 2 * bx - (ax + cx) / 2;
-  const qy = 2 * by - (ay + cy) / 2;
-  const len = 24 + j[6];
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(Math.atan2(cy - qy, cx - qx) - Math.PI / 2); // касательная в конце рукава
-  ctx.fillStyle = FUR;
-  ctx.fillRect(-width / 2, -1, width, len + 2);
-  ctx.translate(0, len);
-  shape(ctx, [[-width / 2, -2, 1], [width / 2, -2, 1], [11, 6], [11, 12], [-11, 12], [-11, 6]], FUR);
-  for (const x of [-7, 0, 7]) {
+  },
+  face: (ctx) => {
     ctx.beginPath();
-    ctx.arc(x, x === 0 ? 16 : 14, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function leg(ctx: CanvasRenderingContext2D, j: number[], boot: string) {
-  limb(ctx, j, PANTS, 17);
-  ctx.save();
-  along(ctx, j);
-  ctx.fillStyle = FUR;
-  ctx.fillRect(-8.5, 0, 17, 14); // тёмная полоса носка
-  ctx.translate(0, 14);
-  ctx.rotate(j[6] * DEG);
-  shape(ctx, BOOT, boot);
-  line(ctx, [[-4, 5], [3, 5], [-4, 11], [3, 11]], LACE, 2);
-  ctx.restore();
-}
-
-/**
- * Линза: острый внешний угол, чуть скруглённый внутренний, пик дуги посередине.
- * Веки — это высоты дуг: top вверх и bottom вниз от линии глаза (отрицательная — дуга перешла середину).
- */
-function eyePath(ctx: CanvasRenderingContext2D, outer: number, inner: number, cy: number, top: number, bottom: number) {
-  const w = inner - outer;
-  const a = outer + w * 0.2;
-  const b = inner - w * 0.06;
-  ctx.beginPath();
-  ctx.moveTo(outer, cy);
-  ctx.bezierCurveTo(a, cy - top, b, cy - top, inner, cy);
-  ctx.bezierCurveTo(b, cy + bottom, a, cy + bottom, outer, cy);
-}
-
-function eye(ctx: CanvasRenderingContext2D, outer: number, inner: number, cy: number, pupil: XY, r: number, lids: number[]) {
-  const h = 35;
-  const top = h * (1 - lids[0]);
-  const bottom = h * (1 - lids[1]);
-  if (top + bottom < 1) {
-    // веки сомкнулись — тёмная линия там, где сошлись дуги
-    const w = inner - outer;
-    ctx.beginPath();
-    ctx.moveTo(outer, cy);
-    ctx.bezierCurveTo(outer + w * 0.2, cy - top * 0.75, inner - w * 0.06, cy - top * 0.75, inner, cy);
-    ctx.strokeStyle = LID_LINE;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
+    ctx.moveTo(-22, -237);
+    ctx.lineTo(-12, -237);
+    ctx.lineTo(-17, -228);
+    ctx.closePath();
+    ctx.strokeStyle = CREAM;
+    ctx.lineWidth = 2.8;
+    ctx.lineJoin = 'round';
     ctx.stroke();
-    return;
-  }
-  eyePath(ctx, outer, inner, cy, top, bottom);
-  ctx.fillStyle = CREAM;
-  ctx.fill();
-  ctx.save();
-  ctx.clip();
-  ctx.beginPath();
-  ctx.arc(...pupil, r, 0, Math.PI * 2);
-  ctx.fillStyle = PUPIL;
-  ctx.fill();
-  ctx.restore();
-}
-
-function head(ctx: CanvasRenderingContext2D, lids: number[], look: number[]) {
-  shape(ctx, HEAD, FUR);
-  const tuft = ctx.createLinearGradient(0, -332, 0, -354);
-  tuft.addColorStop(0, '#1c2532');
-  tuft.addColorStop(1, '#7d474b');
-  shape(ctx, TUFT, tuft);
-  for (const s of [[[-20, -315], [-15, -303]], [[-6, -326], [-8, -312]], [[0, -308], [-7, -297]]] as XY[][]) {
-    line(ctx, s, FOREHEAD, 3);
-  }
-  eye(ctx, -99, -18, -267, [-81.5 + look[0], -264.5 + look[1]], 30.5, lids);
-  eye(ctx, 78, -4, -267, [8 + look[0], -267 + look[1]], 30.5, lids);
-
-  // нос, рот «ㅅ», усы
-  ctx.beginPath();
-  ctx.moveTo(-22, -237);
-  ctx.lineTo(-12, -237);
-  ctx.lineTo(-17, -228);
-  ctx.closePath();
-  ctx.strokeStyle = CREAM;
-  ctx.lineWidth = 2.8;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-  line(ctx, [[-26, -214], [-17, -227], [-5, -214]], CREAM, 2.8);
-  for (const w of [[[-53, -231], [-35, -230]], [[-51, -218], [-36, -221]], [[6, -230], [23, -231]], [[8, -222], [21, -218]]] as XY[][]) {
-    line(ctx, w, CREAM, 2.8);
-  }
-}
-
-/** Кадр в пикселях спрайта (без масштаба и отражения). */
-export function drawFrame(ctx: CanvasRenderingContext2D, f: MaeFrame) {
-  leg(ctx, f.backLeg, SHOE_BACK);
-  leg(ctx, f.frontLeg, SHOE);
-  group(ctx, f.torso, TORSO_PIVOT, () => shape(ctx, HIPS, PANTS));
-  arm(ctx, f.backArm, 12); // дальняя рука — за корпусом
-  group(ctx, f.torso, TORSO_PIVOT, () => {
-    shape(ctx, TORSO, SHIRT);
-    shape(ctx, NECK, FUR);
+    line(ctx, [[-26, -214], [-17, -227], [-5, -214]], CREAM, 2.8);
+    for (const w of [[[-53, -231], [-35, -230]], [[-51, -218], [-36, -221]], [[6, -230], [23, -231]], [[8, -222], [21, -218]]] as XY[][]) {
+      line(ctx, w, CREAM, 2.8);
+    }
+  },
+  chest: (ctx) => {
     ctx.beginPath();
     ctx.ellipse(-22, -155, 12, 15, 0, 0, Math.PI * 2);
     ctx.strokeStyle = BROWN;
     ctx.lineWidth = 4.5;
     ctx.stroke();
     line(ctx, [[-33, -168], [-10, -140]], BROWN, 4.5);
-  });
-  arm(ctx, f.frontArm, 16); // ближняя — перед корпусом
-  group(ctx, f.head, HEAD_PIVOT, () => head(ctx, f.lids ?? [0, 0], f.look ?? [0, 0]));
+  },
+};
+
+/** Кадр в пикселях спрайта (без масштаба и отражения). */
+export function drawFrame(ctx: CanvasRenderingContext2D, f: MaeFrame) {
+  drawCat(ctx, MAE_SKIN, f);
 }
 
 const RUN_FPS = 25; // кадры бега сменяются ступенчато, как в webp из игры

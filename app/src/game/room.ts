@@ -95,13 +95,26 @@ function compile([type, color, raw]: Prim): (ctx: Ctx) => void {
       rule = 'evenodd';
       break;
   }
-  // 'lg x0 x1 #c0 #c1 …' — горизонтальный градиент, остановки равномерно от x0 до x1
+  // Цвет фигуры:
+  //  '#rrggbb[aa]' — сплошной;
+  //  'lg x0 x1 #c0 #c1 …' — горизонтальный градиент, 'lv y0 y1 #c0 …' — вертикальный (остановки равномерно);
+  //  'ld x0 y0 x1 y1 #c0 …' — вдоль произвольной оси;
+  //  'rg cx cy r #c0 #c1 …' — радиальный от центра к радиусу r;
+  //  'dg #rrggbb' — осветление (color-dodge): под фигурой цвет × 1/(1−c) — лучи света.
+  const dodge = color.startsWith('dg ');
+  const spec = dodge ? color.slice(3) : color;
   const paint = (ctx: Ctx): string | CanvasGradient => {
-    if (!color.startsWith('lg ')) return color;
-    const [, x0, x1, ...stops] = color.split(' ');
-    const grad = ctx.createLinearGradient(+x0, 0, +x1, 0);
-    stops.forEach((c, i) => grad.addColorStop(i / (stops.length - 1), c));
-    return grad;
+    const [kind, ...rest] = spec.split(' ');
+    const stopsFrom = (grad: CanvasGradient, stops: string[]) => {
+      stops.forEach((c, i) => grad.addColorStop(i / (stops.length - 1), c));
+      return grad;
+    };
+    if (kind === 'lg') return stopsFrom(ctx.createLinearGradient(+rest[0], 0, +rest[1], 0), rest.slice(2));
+    // 'ld x0 y0 x1 y1 #c0 …' — линейный градиент вдоль произвольной оси (луч света вдоль своей длины)
+    if (kind === 'ld') return stopsFrom(ctx.createLinearGradient(+rest[0], +rest[1], +rest[2], +rest[3]), rest.slice(4));
+    if (kind === 'lv') return stopsFrom(ctx.createLinearGradient(0, +rest[0], 0, +rest[1]), rest.slice(2));
+    if (kind === 'rg') return stopsFrom(ctx.createRadialGradient(+rest[0], +rest[1], 0, +rest[0], +rest[1], +rest[2]), rest.slice(3));
+    return spec;
   };
   if (strokeWidth) {
     return (ctx) => {
@@ -112,10 +125,46 @@ function compile([type, color, raw]: Prim): (ctx: Ctx) => void {
       ctx.stroke(path);
     };
   }
+  // 'eg cx cy rx ry #c0 …' — эллиптический градиент: круглый в пространстве, сжатом по y, путь пересчитан обратно
+  if (spec.startsWith('eg ')) {
+    const [, cx, cy, rx, ry, ...stops] = spec.split(' ');
+    const k = +ry / +rx;
+    const inner = new Path2D();
+    inner.addPath(path, new DOMMatrix().translate(+cx, +cy).scale(1, 1 / k).translate(-cx, -cy));
+    return (ctx) => {
+      ctx.save();
+      if (dodge) ctx.globalCompositeOperation = 'color-dodge';
+      ctx.translate(+cx, +cy);
+      ctx.scale(1, k);
+      ctx.translate(-cx, -cy);
+      const grad = ctx.createRadialGradient(+cx, +cy, 0, +cx, +cy, +rx);
+      stops.forEach((c, i) => grad.addColorStop(i / (stops.length - 1), c));
+      ctx.fillStyle = grad;
+      ctx.fill(inner, rule);
+      ctx.restore();
+    };
+  }
   return (ctx) => {
     ctx.fillStyle = paint(ctx);
+    if (dodge) ctx.globalCompositeOperation = 'color-dodge';
     ctx.fill(path, rule);
+    if (dodge) ctx.globalCompositeOperation = 'source-over';
   };
+}
+
+/** Фигуры сцены → один запечённый холст (этажи дома: свет уже в фигурах). */
+export function bakeArt(prims: Prim[], w: number, h: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(w);
+  canvas.height = Math.ceil(h);
+  const ctx = canvas.getContext('2d')!;
+  for (const draw of prims.map(compile)) draw(ctx);
+  return canvas;
+}
+
+/** Фигуры, рисуемые каждый кадр (передний план поверх Мэй). */
+export function compileAll(prims: Prim[]): ((ctx: Ctx) => void)[] {
+  return prims.map(compile);
 }
 
 type Draw = (ctx: Ctx) => void;

@@ -31,6 +31,7 @@ export interface Hotspot {
   promptX: number; // подсказка-глаз над предметом
   promptY: number;
   script: DialogueNode[];
+  exit?: { scene: 'attic' | 'floor2'; at: string }; // переход вместо диалога (выход у вешалки)
 }
 
 // Тексты — черновик (пользователь потом решит, править ли).
@@ -81,15 +82,13 @@ export const HOTSPOTS: Hotspot[] = [
     ],
   },
   {
-    // выход на второй этаж — у вешалки; пока этажа нет, затемнение и возврат в комнату
+    // выход на второй этаж — у вешалки
     id: 'exit',
     x: 2860,
     radius: 170,
     promptX: 2860,
     promptY: 700,
-    script: [
-      { say: 'Спуститься вниз?' },
-      { choose: [{ label: 'Пошли', action: 'exit' }, { label: 'Ещё побуду тут' }] },
-    ],
+    exit: { scene: 'floor2', at: 'fromAttic' },
+    script: [],
   },
 ];
