@@ -1,0 +1,1 @@
+{"head": "CJ_head_blink_00000", "base": "CJ_head_blink_00000_eyes_base", "mask": "CJ_head_blink_00000_eyes_mask", "color": "#1b0000", "pupils": [{"x": 104.25, "y": 72.3, "r": 26.68, "cx": 87.5, "cy": 76.0, "rx": 27.49, "ry": 19.8}, {"x": 203.1, "y": 72.44, "r": 26.07, "cx": 187.0, "cy": 76.0, "rx": 27.36, "ry": 19.8}]}

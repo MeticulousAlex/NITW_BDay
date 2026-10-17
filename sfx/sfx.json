@@ -1,0 +1,538 @@
+{
+ "step/concrete/walk": {
+  "dir": "step/concrete/walk",
+  "n": 10
+ },
+ "step/concrete/run": {
+  "dir": "step/concrete/run",
+  "n": 10
+ },
+ "step/concrete/jump": {
+  "dir": "step/concrete/jump",
+  "n": 6
+ },
+ "step/concrete/land": {
+  "dir": "step/concrete/land",
+  "n": 6
+ },
+ "step/concrete/turn": {
+  "dir": "step/concrete/turn",
+  "n": 6
+ },
+ "step/concrete/scuff": {
+  "dir": "step/concrete/scuff",
+  "n": 4
+ },
+ "step/carpet/walk": {
+  "dir": "step/carpet/walk",
+  "n": 7
+ },
+ "step/carpet/run": {
+  "dir": "step/carpet/run",
+  "n": 7
+ },
+ "step/carpet/jump": {
+  "dir": "step/carpet/jump",
+  "n": 6
+ },
+ "step/carpet/land": {
+  "dir": "step/carpet/land",
+  "n": 6
+ },
+ "step/carpet/turn": {
+  "dir": "step/carpet/turn",
+  "n": 5
+ },
+ "step/carpet/scuff": {
+  "dir": "step/carpet/scuff",
+  "n": 7
+ },
+ "step/wood/walk": {
+  "dir": "step/wood/walk",
+  "n": 10
+ },
+ "step/wood/run": {
+  "dir": "step/wood/run",
+  "n": 8
+ },
+ "step/wood/jump": {
+  "dir": "step/wood/jump",
+  "n": 6
+ },
+ "step/wood/land": {
+  "dir": "step/wood/land",
+  "n": 6
+ },
+ "step/wood/turn": {
+  "dir": "step/wood/turn",
+  "n": 6
+ },
+ "step/wood/scuff": {
+  "dir": "step/wood/scuff",
+  "n": 6
+ },
+ "step/lampost/walk": {
+  "dir": "step/lampost/walk",
+  "n": 6
+ },
+ "step/lampost/run": {
+  "dir": "step/lampost/run",
+  "n": 6
+ },
+ "step/lampost/jump": {
+  "dir": "step/lampost/jump",
+  "n": 6
+ },
+ "step/lampost/land": {
+  "dir": "step/lampost/land",
+  "n": 6
+ },
+ "step/lampost/turn": {
+  "dir": "step/lampost/turn",
+  "n": 6
+ },
+ "step/lampost/scuff": {
+  "dir": "step/lampost/scuff",
+  "n": 6
+ },
+ "step/branch/walk": {
+  "dir": "step/branch/walk",
+  "n": 14
+ },
+ "step/branch/run": {
+  "dir": "step/branch/run",
+  "n": 12
+ },
+ "step/branch/jump": {
+  "dir": "step/branch/jump",
+  "n": 9
+ },
+ "step/branch/land": {
+  "dir": "step/branch/land",
+  "n": 10
+ },
+ "step/branch/turn": {
+  "dir": "step/branch/turn",
+  "n": 11
+ },
+ "step/branch/scuff": {
+  "dir": "step/branch/scuff",
+  "n": 10
+ },
+ "step/fence/walk": {
+  "dir": "step/fence/walk",
+  "n": 19
+ },
+ "step/fence/run": {
+  "dir": "step/fence/run",
+  "n": 19
+ },
+ "step/fence/turn": {
+  "dir": "step/fence/turn",
+  "n": 19
+ },
+ "step/fence/scuff": {
+  "dir": "step/fence/scuff",
+  "n": 19
+ },
+ "step/fence/jump": {
+  "dir": "step/fence/jump",
+  "n": 9
+ },
+ "step/fence/land": {
+  "dir": "step/fence/land",
+  "n": 9
+ },
+ "step/powerline/walk": {
+  "dir": "step/powerline/walk",
+  "n": 6
+ },
+ "step/powerline/run": {
+  "dir": "step/powerline/run",
+  "n": 6
+ },
+ "step/powerline/turn": {
+  "dir": "step/powerline/turn",
+  "n": 6
+ },
+ "step/powerline/jump": {
+  "dir": "step/powerline/jump",
+  "n": 14
+ },
+ "step/powerline/land": {
+  "dir": "step/powerline/land",
+  "n": 14
+ },
+ "step/powerline/scuff": {
+  "dir": "step/powerline/scuff",
+  "n": 5
+ },
+ "step/metal/walk": {
+  "dir": "step/metal/walk",
+  "n": 10
+ },
+ "step/metal/run": {
+  "dir": "step/metal/run",
+  "n": 14
+ },
+ "step/metal/jump": {
+  "dir": "step/metal/jump",
+  "n": 5
+ },
+ "step/metal/land": {
+  "dir": "step/metal/land",
+  "n": 8
+ },
+ "step/metal/turn": {
+  "dir": "step/metal/turn",
+  "n": 9
+ },
+ "step/metal/scuff": {
+  "dir": "step/metal/scuff",
+  "n": 8
+ },
+ "vo/jump": {
+  "dir": "vo/jump",
+  "n": 22
+ },
+ "event:/mae_house/amb_mae_house_day": {
+  "dir": "ev/mae_house/amb_mae_house_day",
+  "n": 1
+ },
+ "event:/mae_house/spot_fridge": {
+  "dir": "ev/mae_house/spot_fridge",
+  "n": 1
+ },
+ "event:/mae_room/amb_day": {
+  "dir": "ev/mae_room/amb_day",
+  "n": 1
+ },
+ "event:/mae_street/amb_maestreet": {
+  "dir": "ev/mae_street/amb_maestreet",
+  "n": 1
+ },
+ "event:/gen/tree_leaves_rustling": {
+  "dir": "ev/gen/tree_leaves_rustling",
+  "n": 3,
+  "gap": [
+   0.5,
+   3
+  ]
+ },
+ "event:/music/towne_act1": {
+  "dir": "ev/music/towne_act1",
+  "n": 1
+ },
+ "event:/town/amb": {
+  "dir": "ev/town/amb",
+  "n": 1
+ },
+ "event:/town/amb_high_wind": {
+  "dir": "ev/town/amb_high_wind",
+  "n": 1
+ },
+ "event:/town/pigeon/spec_coo": {
+  "dir": "ev/town/pigeon/spec_coo",
+  "n": 24,
+  "gap": [
+   3,
+   10
+  ]
+ },
+ "event:/town/pigeon/peck": {
+  "dir": "ev/town/pigeon/peck",
+  "n": 6
+ },
+ "event:/town/pigeon/jump": {
+  "dir": "ev/town/pigeon/jump",
+  "n": 15
+ },
+ "event:/town/pigeon/flyaway": {
+  "dir": "ev/town/pigeon/flyaway",
+  "n": 9
+ },
+ "event:/town/trashcan_lid_pop": {
+  "dir": "ev/town/trashcan_lid_pop",
+  "n": 3
+ },
+ "event:/mae/car_jump": {
+  "dir": "ev/mae/car_jump",
+  "n": 5
+ },
+ "event:/mae/car_land": {
+  "dir": "ev/mae/car_land",
+  "n": 6
+ },
+ "event:/mae/kick_leaves": {
+  "dir": "ev/mae/kick_leaves",
+  "n": 5
+ },
+ "event:/ui/transition_exit": {
+  "dir": "ev/ui/transition_exit",
+  "n": 4
+ },
+ "event:/ui/transition_enter": {
+  "dir": "ev/ui/transition_enter",
+  "n": 3
+ },
+ "event:/laptop/turn_on": {
+  "dir": "ev/laptop/turn_on",
+  "n": 1
+ },
+ "event:/laptop/turn_on#mechanical": {
+  "dir": "ev/laptop/turn_on_mechanical",
+  "n": 1
+ },
+ "event:/laptop/turn_off": {
+  "dir": "ev/laptop/turn_off",
+  "n": 1
+ },
+ "event:/laptop/turn_off#mechanical": {
+  "dir": "ev/laptop/turn_off_mechanical",
+  "n": 1
+ },
+ "event:/laptop/click_gen": {
+  "dir": "ev/laptop/click_gen",
+  "n": 6
+ },
+ "event:/laptop/sharkle": {
+  "dir": "ev/laptop/sharkle",
+  "n": 7
+ },
+ "event:/laptop/newmessage": {
+  "dir": "ev/laptop/newmessage",
+  "n": 1
+ },
+ "event:/laptop/textscroll": {
+  "dir": "ev/laptop/textscroll",
+  "n": 5
+ },
+ "event:/telescope/tune": {
+  "dir": "ev/telescope/tune",
+  "n": 1
+ },
+ "event:/telescope/edge": {
+  "dir": "ev/telescope/edge",
+  "n": 4
+ },
+ "event:/telescope/find_constellation": {
+  "dir": "ev/telescope/find_constellation",
+  "n": 4
+ },
+ "event:/telescope/done": {
+  "dir": "ev/telescope/done",
+  "n": 2
+ },
+ "event:/telescope/telescope_flare": {
+  "dir": "ev/telescope/telescope_flare",
+  "n": 1
+ },
+ "event:/music/telescope": {
+  "dir": "ev/music/telescope",
+  "n": 1
+ },
+ "event:/train/whistle": {
+  "dir": "ev/train/whistle",
+  "n": 2
+ },
+ "event:/train/arrive": {
+  "dir": "ev/train/arrive",
+  "n": 1
+ },
+ "event:/train/run": {
+  "dir": "ev/train/run",
+  "n": 1
+ },
+ "event:/gregg_woods/amb_bed": {
+  "dir": "ev/gregg_woods/amb_bed",
+  "n": 1
+ },
+ "event:/music/gregg_woods": {
+  "dir": "ev/music/gregg_woods",
+  "n": 1
+ },
+ "event:/paws/open": {
+  "dir": "ev/paws/open",
+  "n": 4
+ },
+ "event:/paws/close": {
+  "dir": "ev/paws/close",
+  "n": 4
+ },
+ "event:/paws/move": {
+  "dir": "ev/paws/move",
+  "n": 1
+ },
+ "event:/paws/grab": {
+  "dir": "ev/paws/grab",
+  "n": 5
+ },
+ "event:/paws/release": {
+  "dir": "ev/paws/release",
+  "n": 4
+ },
+ "event:/cairn/land": {
+  "dir": "ev/cairn/land",
+  "n": 6
+ },
+ "event:/cairn/collapse": {
+  "dir": "ev/cairn/collapse",
+  "n": 1
+ },
+ "event:/tattoo/hum": {
+  "dir": "ev/tattoo/hum",
+  "n": 1
+ },
+ "event:/tattoo/drill": {
+  "dir": "ev/tattoo/drill",
+  "n": 1
+ },
+ "event:/tattoo/pickup": {
+  "dir": "ev/tattoo/pickup",
+  "n": 1
+ },
+ "event:/tattoo/release": {
+  "dir": "ev/tattoo/release",
+  "n": 1
+ },
+ "event:/ui/journal_open": {
+  "dir": "ev/ui/journal_open",
+  "n": 4
+ },
+ "event:/ui/journal_close": {
+  "dir": "ev/ui/journal_close",
+  "n": 4
+ },
+ "event:/ui/journal_page": {
+  "dir": "ev/ui/journal_page",
+  "n": 8
+ },
+ "event:/ui/journal_alert": {
+  "dir": "ev/ui/journal_alert",
+  "n": 4
+ },
+ "event:/paws_mode/grab_paper": {
+  "dir": "ev/paws_mode/grab_paper",
+  "n": 9
+ },
+ "event:/paws_mode/release_paper": {
+  "dir": "ev/paws_mode/release_paper",
+  "n": 9
+ },
+ "event:/paws_mode/paper_bounce": {
+  "dir": "ev/paws_mode/paper_bounce",
+  "n": 10
+ },
+ "event:/paws_mode/grab_yarn": {
+  "dir": "ev/paws_mode/grab_yarn",
+  "n": 8
+ },
+ "event:/paws_mode/release_yarn": {
+  "dir": "ev/paws_mode/release_yarn",
+  "n": 8
+ },
+ "event:/paws_mode/yarn_bounce": {
+  "dir": "ev/paws_mode/yarn_bounce",
+  "n": 18
+ },
+ "event:/music/title": {
+  "dir": "ev/music/title",
+  "n": 1
+ },
+ "event:/title/wind_options": {
+  "dir": "ev/title/wind_options",
+  "n": 1
+ },
+ "event:/title/leaves": {
+  "dir": "ev/title/leaves",
+  "n": 1
+ },
+ "event:/title/leaves_open": {
+  "dir": "ev/title/leaves_open",
+  "n": 1
+ },
+ "event:/bus_station_exterior/train_by_LP": {
+  "dir": "ev/bus_station_exterior/train_by_lp",
+  "n": 1
+ },
+ "event:/bus_station_exterior/train_by_LP_2": {
+  "dir": "ev/bus_station_exterior/train_by_lp_2",
+  "n": 1
+ },
+ "event:/bus_station_exterior/train_whistle": {
+  "dir": "ev/bus_station_exterior/train_whistle",
+  "n": 2
+ },
+ "event:/music/pierogies": {
+  "dir": "ev/music/pierogies",
+  "n": 1
+ },
+ "event:/title/select": {
+  "dir": "ev/title/select",
+  "n": 6
+ },
+ "event:/title/move": {
+  "dir": "ev/title/move",
+  "n": 4
+ },
+ "event:/intro/wind_low": {
+  "dir": "ev/intro/wind_low",
+  "n": 1
+ },
+ "event:/intro/wind_med": {
+  "dir": "ev/intro/wind_med",
+  "n": 1
+ },
+ "event:/intro/wind_high": {
+  "dir": "ev/intro/wind_high",
+  "n": 1
+ },
+ "event:/music/waking_up": {
+  "dir": "ev/music/waking_up",
+  "n": 1
+ },
+ "event:/music/sleep": {
+  "dir": "ev/music/sleep",
+  "n": 1
+ },
+ "event:/mae_room/amb_morning": {
+  "dir": "ev/mae_room/amb_morning",
+  "n": 1
+ },
+ "event:/mae_room/amb_night": {
+  "dir": "ev/mae_room/amb_night",
+  "n": 1
+ },
+ "event:/mae/wake": {
+  "dir": "ev/mae/wake",
+  "n": 1
+ },
+ "event:/mae/gotosleep": {
+  "dir": "ev/mae/gotosleep",
+  "n": 1
+ },
+ "event:/town/car_A": {
+  "dir": "ev/town/car_a",
+  "n": 1
+ },
+ "event:/town/car_B": {
+  "dir": "ev/town/car_b",
+  "n": 1
+ },
+ "event:/town/car_C": {
+  "dir": "ev/town/car_c",
+  "n": 1
+ },
+ "event:/town/car_D": {
+  "dir": "ev/town/car_d",
+  "n": 1
+ },
+ "event:/town/car_E": {
+  "dir": "ev/town/car_e",
+  "n": 1
+ },
+ "event:/town/car_F": {
+  "dir": "ev/town/car_f",
+  "n": 1
+ }
+}
