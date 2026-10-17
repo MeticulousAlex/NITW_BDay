@@ -1,7 +1,7 @@
 // Кэш ресурсов игры (GitHub Pages: кэш браузера всего 10 мин, сеть медленная). Картинки, звуки, json — из кэша, если
 // уже скачивались (в том числе фоном — prefetch.ts); страница — всегда из сети. Версия — время сборки
 // (tools/pages-postbuild.mjs): новый деплой — новый кэш, старый удаляется.
-const V = 'nitw-1792262539099';
+const V = 'nitw-1792266434115';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys()
   .then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
