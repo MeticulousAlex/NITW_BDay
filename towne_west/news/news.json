@@ -1,4 +1,5 @@
 [
  {"file": "/towne_east/sprites/zasranec.png"},
- {"file": "/towne_east/sprites/drinkit.png"}
+ {"file": "/towne_east/sprites/drinkit.png"},
+ {"file": "/towne_east/sprites/negri.jpg", "h": 1.98, "dark": 0.15}
 ]

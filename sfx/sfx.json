@@ -343,6 +343,66 @@
   "dir": "ev/train/run",
   "n": 1
  },
+ "event:/ui/speech_appear": {
+  "dir": "ev/ui/speech_appear",
+  "n": 4
+ },
+ "event:/ui/speech_disappear": {
+  "dir": "ev/ui/speech_disappear",
+  "n": 4
+ },
+ "event:/ui/speech_resize": {
+  "dir": "ev/ui/speech_resize",
+  "n": 3
+ },
+ "event:/ui/choice_appear": {
+  "dir": "ev/ui/choice_appear",
+  "n": 4
+ },
+ "event:/ui/text_roll": {
+  "dir": "ev/ui/text_roll",
+  "n": 11
+ },
+ "event:/ol_pickaxe/amb_ol_pickaxe": {
+  "dir": "ev/ol_pickaxe/amb_ol_pickaxe",
+  "n": 1
+ },
+ "event:/ol_pickaxe/music": {
+  "dir": "ev/ol_pickaxe/music",
+  "n": 1
+ },
+ "event:/snack_falcon/music": {
+  "dir": "ev/snack_falcon/music",
+  "n": 1
+ },
+ "event:/snack_falcon/electric_sign": {
+  "dir": "ev/snack_falcon/electric_sign",
+  "n": 1
+ },
+ "event:/snack_falcon/slushie_machine": {
+  "dir": "ev/snack_falcon/slushie_machine",
+  "n": 1
+ },
+ "event:/tunnel/amb_bed": {
+  "dir": "ev/tunnel/amb_bed",
+  "n": 1
+ },
+ "event:/tunnel/amb_neon": {
+  "dir": "ev/tunnel/amb_neon",
+  "n": 1
+ },
+ "event:/mallards_tomb/pipe_hiss_01": {
+  "dir": "ev/mallards_tomb/pipe_hiss_01",
+  "n": 1
+ },
+ "event:/mallards_tomb/pipe_hiss_02": {
+  "dir": "ev/mallards_tomb/pipe_hiss_02",
+  "n": 1
+ },
+ "event:/mallards_tomb/pipe_hiss_03": {
+  "dir": "ev/mallards_tomb/pipe_hiss_03",
+  "n": 1
+ },
  "event:/gregg_woods/amb_bed": {
   "dir": "ev/gregg_woods/amb_bed",
   "n": 1
@@ -382,6 +442,10 @@
  "event:/tattoo/hum": {
   "dir": "ev/tattoo/hum",
   "n": 1
+ },
+ "event:/tattoo/dip": {
+  "dir": "ev/tattoo/dip",
+  "n": 12
  },
  "event:/tattoo/drill": {
   "dir": "ev/tattoo/drill",
